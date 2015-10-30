@@ -3,11 +3,13 @@ appropriate EPN group
 """
 
 import logging
+from django.contrib.auth.models import Group
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from tardis.tardis_portal.models import (
-    ExperimentParameter, ObjectACL, ParameterName, Schema)
+    Experiment, ExperimentParameter, ObjectACL, ParameterName, Schema)
+from tardis.tardis_portal.auth.localdb_auth import django_group
 
 logger = logging.getLogger(__name__)
 
@@ -47,3 +49,27 @@ def add_epn_group_acl(sender, **kwargs):
     except Exception:
         logger.exception('trouble creating EPN ACL')
 
+    try:
+        beamline_group = "BEAMLINE_MX"
+        group, created = Group.objects.get_or_create(name=beamline_group)
+        # beamline group
+        ObjectACL.objects.get_or_create(
+            content_type=exp.get_ct(),
+            object_id=exp.id,
+            pluginId=django_group,
+            entityId=str(group.id),
+            canRead=True,
+            aclOwnershipType=ObjectACL.SYSTEM_OWNED)
+
+        # finally, always add acl for admin group
+        group, created = Group.objects.get_or_create(name='admin')
+        ObjectACL.objects.get_or_create(
+            content_type=exp.get_ct(),
+            object_id=exp.id,
+            pluginId=django_group,
+            entityId=str(group.id),
+            isOwner=True,
+            canRead=True,
+            aclOwnershipType=ObjectACL.SYSTEM_OWNED)
+    except Exception:
+        logger.exception('trouble creating beamline and admin ACLs')
